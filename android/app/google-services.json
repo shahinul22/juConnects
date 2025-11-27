@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "371055618192",
+    "project_id": "juconnects-31731",
+    "storage_bucket": "juconnects-31731.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:371055618192:android:636b32226fdc5cf2555015",
+        "android_client_info": {
+          "package_name": "com.example.ju_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAzmHQYJxXWkfw_GpMYnpAGGC0lNs3Vmtc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

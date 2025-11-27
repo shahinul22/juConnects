@@ -1,0 +1,800 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../core/auth_service.dart';
+import 'edit_student_dashboard_screen.dart';
+import '../authentication/login_screen.dart';
+import 'package:ju_connect/models/user_data.dart';
+
+class StudentDashboardScreen extends StatefulWidget {
+  final String userId;
+  const StudentDashboardScreen({Key? key, required this.userId}) : super(key: key);
+
+  @override
+  _StudentDashboardScreenState createState() => _StudentDashboardScreenState();
+}
+
+class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  final AuthService _auth = AuthService();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  UserData? userData;
+  bool isLoading = true;
+  String? errorMessage;
+
+  // Dummy images
+  static const String dummyProfilePic = 'https://i.imgur.com/8x8gK4h.png';
+  static const String dummyCoverPic = 'https://i.imgur.com/9k0JzGZ.png';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    try {
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(widget.userId).get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        setState(() {
+          userData = UserData.fromFirestore(userDoc);
+          isLoading = false;
+        });
+      } else {
+        // Create new document if not exists
+        await _firestore.collection('users').doc(widget.userId).set({
+          'fullName': 'New Student',
+          'email': FirebaseAuth.instance.currentUser?.email ?? 'N/A',
+          'role': 'Student',
+          'bloodGroup': 'N/A',
+          'hall': 'N/A',
+          'idNumber': 'N/A',
+          'department': 'N/A',
+          'session': 'N/A',
+          'roll': '',
+          'school': '',
+          'college': '',
+          'address': '',
+          'phoneNumber': '',
+          'facebookId': '',
+          'whatsapp': '',
+          'instagram': '',
+          'profilePicUrl': dummyProfilePic,
+          'coverPicUrl': dummyCoverPic,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        DocumentSnapshot newUserDoc = await _firestore.collection('users').doc(widget.userId).get();
+        setState(() {
+          userData = UserData.fromFirestore(newUserDoc);
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = e.toString();
+      });
+    }
+  }
+
+  void _editProfile() async {
+    if (userData == null) return;
+
+    final bool? didUpdate = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EditProfileScreen(userData: userData!)),
+    );
+
+    if (didUpdate == true) {
+      setState(() => isLoading = true);
+      await _fetchUserData();
+    }
+  }
+
+  // Social media launch functions
+  void _launchFacebook() async {
+    final url = 'https://facebook.com/${userData!.facebookId}';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    }
+  }
+
+  void _launchInstagram() async {
+    final url = 'https://instagram.com/${userData!.instagram.replaceAll('@', '')}';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    }
+  }
+
+  void _launchWhatsApp() async {
+    final url = 'https://wa.me/${userData!.whatsapp.replaceAll(RegExp(r'[^0-9]'), '')}';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    }
+  }
+
+  void _launchPhone() async {
+    final url = 'tel:${userData!.phoneNumber}';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    }
+  }
+
+  void _launchEmail() async {
+    final url = 'mailto:${userData!.email}';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (userData == null) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        body: _buildErrorUI(),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      body: _buildProfileContent(),
+    );
+  }
+
+  Widget _buildErrorUI() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              errorMessage ?? "Could not load data",
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 16,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "User ID: ${widget.userId}",
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                _fetchUserData();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text("Try Again"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileContent() {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        children: [
+          _buildHeaderSection(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                // Quick Actions Card
+                _buildQuickActionsCard(),
+                const SizedBox(height: 16),
+
+                // Basic Information Card
+                _buildInfoCard(
+                  title: 'Basic Information',
+                  icon: Icons.person_outline,
+                  iconColor: Colors.blue,
+                  children: [
+                    _buildInfoRowWithAction(
+                      Icons.water_drop,
+                      'Blood Group',
+                      userData!.bloodGroup,
+                      Colors.red,
+                    ),
+                    _buildInfoRowWithAction(
+                      Icons.apartment,
+                      'Hall/Residence',
+                      userData!.hall,
+                      Colors.orange,
+                    ),
+                    _buildInfoRowWithAction(
+                      Icons.work_outline,
+                      'Role',
+                      userData!.role,
+                      Colors.green,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Educational Information Card
+                _buildInfoCard(
+                  title: 'Educational Information',
+                  icon: Icons.school_outlined,
+                  iconColor: Colors.purple,
+                  children: [
+                    _buildInfoRowWithAction(
+                      Icons.email_outlined,
+                      'Email',
+                      userData!.email,
+                      Colors.blue,
+                      onTap: _launchEmail,
+                    ),
+                    _buildInfoRowWithAction(
+                      Icons.badge_outlined,
+                      'Student ID',
+                      userData!.idNumber,
+                      Colors.indigo,
+                    ),
+                    _buildInfoRowWithAction(
+                      Icons.business_outlined,
+                      'Department',
+                      userData!.department,
+                      Colors.teal,
+                    ),
+                    _buildInfoRowWithAction(
+                      Icons.calendar_today_outlined,
+                      'Session',
+                      userData!.session,
+                      Colors.amber,
+                    ),
+                    if (userData!.roll.isNotEmpty)
+                      _buildInfoRowWithAction(
+                        Icons.numbers,
+                        'Roll No',
+                        userData!.roll,
+                        Colors.cyan,
+                      ),
+                    if (userData!.school.isNotEmpty)
+                      _buildInfoRowWithAction(
+                        Icons.school_outlined,
+                        'Previous School',
+                        userData!.school,
+                        Colors.blueGrey,
+                      ),
+                    if (userData!.college.isNotEmpty)
+                      _buildInfoRowWithAction(
+                        Icons.account_balance_outlined,
+                        'Previous College',
+                        userData!.college,
+                        Colors.brown,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Contact Details Card
+                if (_hasContactInfo())
+                  _buildInfoCard(
+                    title: 'Contact Details',
+                    icon: Icons.contacts_outlined,
+                    iconColor: Colors.green,
+                    children: [
+                      if (userData!.phoneNumber.isNotEmpty)
+                        _buildInfoRowWithAction(
+                          Icons.phone_outlined,
+                          'Phone Number',
+                          userData!.phoneNumber,
+                          Colors.green,
+                          onTap: _launchPhone,
+                        ),
+                      if (userData!.whatsapp.isNotEmpty)
+                        _buildInfoRowWithAction(
+                          Icons.chat_outlined,
+                          'WhatsApp',
+                          userData!.whatsapp,
+                          Colors.green,
+                          onTap: _launchWhatsApp,
+                        ),
+                      if (userData!.facebookId.isNotEmpty)
+                        _buildInfoRowWithAction(
+                          Icons.facebook,
+                          'Facebook',
+                          userData!.facebookId,
+                          Colors.blue,
+                          onTap: _launchFacebook,
+                        ),
+                      if (userData!.instagram.isNotEmpty)
+                        _buildInfoRowWithAction(
+                          Icons.camera_alt_outlined,
+                          'Instagram',
+                          userData!.instagram,
+                          Colors.pink,
+                          onTap: _launchInstagram,
+                        ),
+                      if (userData!.address.isNotEmpty)
+                        _buildInfoRowWithAction(
+                          Icons.location_on_outlined,
+                          'Address',
+                          userData!.address,
+                          Colors.red,
+                        ),
+                    ],
+                  ),
+
+                // Social Media Links Card
+                if (_hasSocialMedia())
+                  _buildSocialMediaCard(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return Container(
+      height: 280,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.indigo.shade700, Colors.indigo.shade900],
+        ),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.indigo.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Cover Photo with Overlay
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(30),
+                bottomRight: Radius.circular(30),
+              ),
+              child: ColorFiltered(
+                colorFilter: ColorFilter.mode(
+                  Colors.indigo.withOpacity(0.4),
+                  BlendMode.overlay,
+                ),
+                child: Image.network(
+                  userData?.coverPicUrl ?? dummyCoverPic,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ),
+
+          // Profile Content
+          Positioned.fill(
+            child: Column(
+              children: [
+                const SizedBox(height: 40),
+
+                // Profile Avatar with Shadow
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 60,
+                    backgroundColor: Colors.white,
+                    child: CircleAvatar(
+                      radius: 56,
+                      backgroundImage: NetworkImage(
+                          userData?.profilePicUrl ?? dummyProfilePic),
+                      backgroundColor: Colors.grey[200],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Name with better typography
+                Text(
+                  userData?.fullName ?? 'New Student',
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 8),
+
+                // Role Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.green.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    userData?.role ?? 'Student',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Email at bottom
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Text(
+                    userData?.email ?? 'N/A',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsCard() {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.white, Colors.grey[50]!],
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildQuickAction(
+                Icons.edit_note,
+                'Edit Profile',
+                Colors.indigo,
+                _editProfile,
+              ),
+              _buildQuickAction(
+                Icons.share,
+                'Share Profile',
+                Colors.green,
+                    () {
+                  _showComingSoonSnackbar('Share Profile');
+                },
+              ),
+              _buildQuickAction(
+                Icons.qr_code,
+                'QR Code',
+                Colors.orange,
+                    () {
+                  _showComingSoonSnackbar('QR Code');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showComingSoonSnackbar(String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$feature - Coming Soon!'),
+        backgroundColor: Colors.blueAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAction(IconData icon, String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(0.3), width: 2),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[700],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required String title,
+    required IconData icon,
+    required Color iconColor,
+    required List<Widget> children,
+  }) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Card Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Divider
+            Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.grey[300]!, Colors.grey[100]!],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Info Rows
+            Column(children: children),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRowWithAction(
+      IconData icon,
+      String label,
+      String value,
+      Color iconColor, {
+        VoidCallback? onTap,
+      }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: iconColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onTap != null)
+                  Icon(
+                    Icons.arrow_outward,
+                    size: 16,
+                    color: Colors.grey[400],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialMediaCard() {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.share_outlined, color: Colors.purple, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Connect With Me',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                if (userData!.facebookId.isNotEmpty)
+                  _buildSocialIcon(Icons.facebook, Colors.blue, _launchFacebook),
+                if (userData!.instagram.isNotEmpty)
+                  _buildSocialIcon(Icons.camera_alt, Colors.pink, _launchInstagram),
+                if (userData!.whatsapp.isNotEmpty)
+                  _buildSocialIcon(Icons.chat, Colors.green, _launchWhatsApp),
+                if (userData!.phoneNumber.isNotEmpty)
+                  _buildSocialIcon(Icons.phone, Colors.teal, _launchPhone),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialIcon(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withOpacity(0.3), width: 2),
+        ),
+        child: Icon(icon, color: color, size: 24),
+      ),
+    );
+  }
+
+  bool _hasContactInfo() {
+    return userData != null &&
+        (userData!.phoneNumber.isNotEmpty ||
+            userData!.whatsapp.isNotEmpty ||
+            userData!.facebookId.isNotEmpty ||
+            userData!.instagram.isNotEmpty ||
+            userData!.address.isNotEmpty);
+  }
+
+  bool _hasSocialMedia() {
+    return userData != null &&
+        (userData!.facebookId.isNotEmpty ||
+            userData!.instagram.isNotEmpty ||
+            userData!.whatsapp.isNotEmpty);
+  }
+}

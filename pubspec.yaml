@@ -1,0 +1,31 @@
+name: ju_connect
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.10.1 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ✅ Corrected Firebase packages to latest stable versions (around 6.x.x)
+  firebase_core: ^4.2.1      # Latest stable Core package
+  firebase_auth: ^6.1.2      # Latest stable Auth package
+  cloud_firestore: ^6.1.0    # Latest stable Firestore package
+  firebase_storage: ^13.0.4  # Latest stable Storage package
+  image_picker: ^1.1.2
+  supabase_flutter: ^2.5.0
+  intl: ^0.18.1 # Use a recent version
+  flutter_riverpod: ^2.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
