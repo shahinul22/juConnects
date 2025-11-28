@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../../models/club_model.dart';
 import '../../service/club_service.dart';
 
-// Import new tab files
+// Import tabs
 import 'details_tabs/overview_tab.dart';
 import 'details_tabs/activities_tab.dart';
 import 'details_tabs/membership_tab.dart';
 import 'details_tabs/team_tab.dart';
 import 'details_tabs/governance_tab.dart';
+
+// Import Edit Page
+import 'edit_club_page.dart';
 
 class _TabBarDelegate extends SliverPersistentHeaderDelegate {
   _TabBarDelegate(this._tabBar);
@@ -49,25 +54,27 @@ class ClubDetailsPage extends StatefulWidget {
   State<ClubDetailsPage> createState() => _ClubDetailsPageState();
 }
 
-class _ClubDetailsPageState extends State<ClubDetailsPage> with SingleTickerProviderStateMixin {
+class _ClubDetailsPageState extends State<ClubDetailsPage>
+    with SingleTickerProviderStateMixin {
   final ClubService _clubService = ClubService();
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+
   bool _isFavorite = false;
 
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
+
     _animationController.forward();
   }
 
@@ -82,30 +89,40 @@ class _ClubDetailsPageState extends State<ClubDetailsPage> with SingleTickerProv
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? "";
+    final isAdmin = widget.club.admins.contains(uid);
+
     return DefaultTabController(
       length: 5,
       child: Scaffold(
         extendBodyBehindAppBar: true,
+        floatingActionButton: isAdmin
+            ? FloatingActionButton.extended(
+          backgroundColor: colorScheme.primary,
+          label: const Text("Edit Club"),
+          icon: const Icon(Icons.edit),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EditClubPage(club: widget.club),
+              ),
+            );
+          },
+        )
+            : null,
         body: NestedScrollView(
-          physics: const BouncingScrollPhysics(),
           headerSliverBuilder: (context, _) => [
             _buildSliverAppBar(theme, colorScheme),
             SliverPersistentHeader(
               pinned: true,
               delegate: _TabBarDelegate(
                 TabBar(
+                  isScrollable: true,
                   indicator: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     color: colorScheme.primary,
                   ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicatorPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  labelColor: Colors.white,
-                  unselectedLabelColor: colorScheme.onSurface.withOpacity(0.6),
-                  isScrollable: true,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-                  splashBorderRadius: BorderRadius.circular(8),
                   tabs: const [
                     Tab(icon: Icon(Icons.dashboard_outlined), text: "Overview"),
                     Tab(icon: Icon(Icons.event_outlined), text: "Activities"),
@@ -115,12 +132,11 @@ class _ClubDetailsPageState extends State<ClubDetailsPage> with SingleTickerProv
                   ],
                 ),
               ),
-            ),
+            )
           ],
           body: FadeTransition(
             opacity: _fadeAnimation,
             child: TabBarView(
-              physics: const BouncingScrollPhysics(),
               children: [
                 OverviewTab(club: widget.club),
                 ActivitiesTab(club: widget.club),
@@ -142,69 +158,28 @@ class _ClubDetailsPageState extends State<ClubDetailsPage> with SingleTickerProv
       backgroundColor: Colors.transparent,
       elevation: 0,
       leading: IconButton(
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-        ),
-        onPressed: () => Navigator.of(context).pop(),
+        icon: _circleIcon(Icons.arrow_back),
+        onPressed: () => Navigator.pop(context),
       ),
       actions: [
         IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.share, color: Colors.white, size: 20),
-          ),
+          icon: _circleIcon(Icons.share),
           onPressed: _shareClub,
         ),
         IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.5),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
+          icon: _circleIcon(_isFavorite ? Icons.favorite : Icons.favorite_border),
           onPressed: _toggleFavorite,
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        title: Text(
-          widget.club.name,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
+        title: Text(widget.club.name),
         background: Stack(
           fit: StackFit.expand,
           children: [
-            // Background Image
             Image.network(
-              widget.club.bannerUrl.isNotEmpty
-                  ? widget.club.bannerUrl
-                  : "https://via.placeholder.com/400x200?text=Club+Banner",
+              widget.club.bannerUrl,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                color: colorScheme.primary.withOpacity(0.7),
-                child: Icon(Icons.group, color: Colors.white, size: 64),
-              ),
             ),
-            // Gradient Overlay
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -217,108 +192,26 @@ class _ClubDetailsPageState extends State<ClubDetailsPage> with SingleTickerProv
                 ),
               ),
             ),
-            // Club Logo
-            Positioned(
-              bottom: 16,
-              left: 0,
-              right: 0,
-              child: Column(
-                children: [
-                  Hero(
-                    tag: 'club-logo-${widget.club.id}',
-                    child: CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Colors.white,
-                      child: CircleAvatar(
-                        radius: 36,
-                        backgroundImage: NetworkImage(widget.club.logoUrl),
-                        onBackgroundImageError: (exception, stackTrace) =>
-                        const Icon(Icons.group, color: Colors.grey),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  void _shareClub() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        margin: const EdgeInsets.all(16),
-        child: Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Share ${widget.club.name}",
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 16,
-                  children: [
-                    _buildShareOption(Icons.message, "Message", Colors.green),
-                    _buildShareOption(Icons.email, "Email", Colors.blue),
-                    _buildShareOption(Icons.link, "Copy Link", Colors.orange),
-                    _buildShareOption(Icons.facebook, "Facebook", Colors.blue[800]!),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
-                ),
-              ],
-            ),
-          ),
-        ),
+  Widget _circleIcon(IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: const BoxDecoration(
+        color: Colors.black45,
+        shape: BoxShape.circle,
       ),
+      child: Icon(icon, color: Colors.white),
     );
   }
 
-  Widget _buildShareOption(IconData icon, String label, Color color) {
-    return Column(
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
-          child: IconButton(
-            icon: Icon(icon, color: color),
-            onPressed: () {},
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 12)),
-      ],
-    );
-  }
+  void _shareClub() {}
 
   void _toggleFavorite() {
-    setState(() {
-      _isFavorite = !_isFavorite;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _isFavorite
-              ? "❤️ Added to favorites"
-              : "💔 Removed from favorites",
-        ),
-        backgroundColor: _isFavorite ? Colors.pink : Colors.grey,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
+    setState(() => _isFavorite = !_isFavorite);
   }
 }

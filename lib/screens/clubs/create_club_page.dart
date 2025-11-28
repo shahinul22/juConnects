@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../models/club_model.dart';
-// import '../../services/club_service.dart';
 import '../../service/club_service.dart';
 
 class CreateClubPage extends StatefulWidget {
@@ -19,7 +19,6 @@ class _CreateClubPageState extends State<CreateClubPage> {
   final _formKey = GlobalKey<FormState>();
   final ClubService clubService = ClubService();
 
-  // Text controllers
   final nameController = TextEditingController();
   final motoController = TextEditingController();
   final descriptionController = TextEditingController();
@@ -38,33 +37,31 @@ class _CreateClubPageState extends State<CreateClubPage> {
 
   Future<String> uploadImage(File file, String folder) async {
     String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
-
     Reference ref = FirebaseStorage.instance.ref().child("$folder/$fileName");
-    await ref.putFile(file);
 
+    await ref.putFile(file);
     return await ref.getDownloadURL();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final String uid = FirebaseAuth.instance.currentUser!.uid;
     String id = FirebaseFirestore.instance.collection('clubs').doc().id;
 
     String logoUrl = '';
     String bannerUrl = '';
 
-    // Upload logo if selected
     if (logoFile != null) {
       logoUrl = await uploadImage(logoFile!, "club_logos");
     } else {
       logoUrl = "https://via.placeholder.com/150";
     }
 
-    // Upload banner if selected
     if (bannerFile != null) {
       bannerUrl = await uploadImage(bannerFile!, "club_banners");
     } else {
-      bannerUrl = "https://i.imgur.com/LxWkZp0.png"; // default banner
+      bannerUrl = "https://i.imgur.com/LxWkZp0.png";
     }
 
     Club club = Club(
@@ -82,8 +79,14 @@ class _CreateClubPageState extends State<CreateClubPage> {
       rulesAndRegulations: rulesController.text.trim(),
       electionProcess: electionController.text.trim(),
       meetingRules: meetingController.text.trim(),
-      isMember: false,
-      memberCount: 0,
+
+      // membership (creator auto member)
+      isMember: true,
+      memberCount: 1,
+
+      // NEW
+      createdBy: uid,
+      admins: [uid],
     );
 
     await clubService.createClub(club);
@@ -119,7 +122,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
                 ? const Center(child: Icon(Icons.add_a_photo, size: 40))
                 : ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.file(imageFile, fit: BoxFit.cover),
+              child: Image.file(imageFile!, fit: BoxFit.cover),
             ),
           ),
         ),
@@ -130,31 +133,25 @@ class _CreateClubPageState extends State<CreateClubPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Create Club"),
-      ),
+      appBar: AppBar(title: const Text("Create Club")),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              // Name
               TextFormField(
                 controller: nameController,
                 decoration: const InputDecoration(labelText: "Club Name"),
                 validator: (v) => v!.isEmpty ? "Enter club name" : null,
               ),
 
-              // Moto
               TextFormField(
                 controller: motoController,
                 decoration: const InputDecoration(labelText: "Club Moto"),
               ),
-
               const SizedBox(height: 16),
 
-              // Type dropdown
               DropdownButtonFormField(
                 value: clubType,
                 items: const [
@@ -167,45 +164,47 @@ class _CreateClubPageState extends State<CreateClubPage> {
                 onChanged: (v) => setState(() => clubType = v.toString()),
                 decoration: const InputDecoration(labelText: "Club Type"),
               ),
-
               const SizedBox(height: 20),
 
-              // Logo Picker
               imagePickerBox(
                 label: "Club Logo",
                 imageFile: logoFile,
                 onPick: () async {
-                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-                  if (picked != null) setState(() => logoFile = File(picked.path));
+                  final picked = await ImagePicker().pickImage(
+                    source: ImageSource.gallery,
+                  );
+                  if (picked != null) {
+                    setState(() => logoFile = File(picked.path));
+                  }
                 },
               ),
-
               const SizedBox(height: 20),
 
-              // Banner Picker
               imagePickerBox(
                 label: "Club Banner",
                 imageFile: bannerFile,
                 onPick: () async {
-                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-                  if (picked != null) setState(() => bannerFile = File(picked.path));
+                  final picked = await ImagePicker().pickImage(
+                    source: ImageSource.gallery,
+                  );
+                  if (picked != null) {
+                    setState(() => bannerFile = File(picked.path));
+                  }
                 },
               ),
-
               const SizedBox(height: 20),
 
               TextFormField(
                 controller: descriptionController,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: "Short Description"),
+                decoration:
+                const InputDecoration(labelText: "Short Description"),
               ),
-
               TextFormField(
                 controller: missionController,
                 maxLines: 2,
                 decoration: const InputDecoration(labelText: "Mission"),
               ),
-
               TextFormField(
                 controller: visionController,
                 maxLines: 2,
@@ -220,25 +219,25 @@ class _CreateClubPageState extends State<CreateClubPage> {
                 controller: whoCanJoinController,
                 decoration: const InputDecoration(labelText: "Who Can Join"),
               ),
-
               TextFormField(
                 controller: membershipCriteriaController,
-                decoration: const InputDecoration(labelText: "Membership Criteria"),
+                decoration:
+                const InputDecoration(labelText: "Membership Criteria"),
               ),
-
               TextFormField(
                 controller: rulesController,
-                decoration: const InputDecoration(labelText: "Rules & Regulations"),
+                decoration:
+                const InputDecoration(labelText: "Rules & Regulations"),
               ),
-
               TextFormField(
                 controller: electionController,
-                decoration: const InputDecoration(labelText: "Election Process"),
+                decoration:
+                const InputDecoration(labelText: "Election Process"),
               ),
-
               TextFormField(
                 controller: meetingController,
-                decoration: const InputDecoration(labelText: "Meeting Rules"),
+                decoration:
+                const InputDecoration(labelText: "Meeting Rules"),
               ),
 
               const SizedBox(height: 20),

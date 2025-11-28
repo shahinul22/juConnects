@@ -6,21 +6,26 @@ class Club {
   final String moto;
   final String type;
   final String logoUrl;
-  final String bannerUrl;        // 🔥 Added
+  final String bannerUrl;
+
   final String description;
   final String mission;
   final String vision;
 
-  // Policies & Constitution
+  // Policies
   final String whoCanJoin;
   final String membershipCriteria;
   final String rulesAndRegulations;
   final String electionProcess;
   final String meetingRules;
 
-  // Membership & UI fields
-  final bool isMember;           // 🔥 Added
-  final int memberCount;         // 🔥 Added
+  // Membership
+  final bool isMember;
+  final int memberCount;
+
+  // NEW FIELDS
+  final String createdBy;           // Creator UID
+  final List<String> admins;        // Admin list (UIDs)
 
   Club({
     required this.id,
@@ -39,6 +44,8 @@ class Club {
     required this.meetingRules,
     this.isMember = false,
     this.memberCount = 0,
+    required this.createdBy,
+    required this.admins,
   });
 
   Map<String, dynamic> toMap() {
@@ -47,7 +54,7 @@ class Club {
       'moto': moto,
       'type': type,
       'logoUrl': logoUrl,
-      'bannerUrl': bannerUrl,                   // 🔥 Added
+      'bannerUrl': bannerUrl,
       'description': description,
       'mission': mission,
       'vision': vision,
@@ -56,8 +63,12 @@ class Club {
       'rulesAndRegulations': rulesAndRegulations,
       'electionProcess': electionProcess,
       'meetingRules': meetingRules,
-      'isMember': isMember,                     // 🔥 Added
-      'memberCount': memberCount,               // 🔥 Added
+      'isMember': isMember,
+      'memberCount': memberCount,
+
+      // new
+      'createdBy': createdBy,
+      'admins': admins,
     };
   }
 
@@ -69,8 +80,8 @@ class Club {
       name: data['name'] ?? '',
       moto: data['moto'] ?? '',
       type: data['type'] ?? 'General',
-      logoUrl: data['logoUrl'] ?? 'https://via.placeholder.com/150',
-      bannerUrl: data['bannerUrl'] ?? '',        // 🔥 Added
+      logoUrl: data['logoUrl'] ?? '',
+      bannerUrl: data['bannerUrl'] ?? '',
       description: data['description'] ?? '',
       mission: data['mission'] ?? '',
       vision: data['vision'] ?? '',
@@ -79,8 +90,12 @@ class Club {
       rulesAndRegulations: data['rulesAndRegulations'] ?? '',
       electionProcess: data['electionProcess'] ?? '',
       meetingRules: data['meetingRules'] ?? '',
-      isMember: data['isMember'] ?? false,       // 🔥 Added
-      memberCount: data['memberCount'] ?? 0,     // 🔥 Added
+      isMember: data['isMember'] ?? false,
+      memberCount: data['memberCount'] ?? 0,
+
+      // new
+      createdBy: data['createdBy'] ?? '',
+      admins: List<String>.from(data['admins'] ?? []),
     );
   }
 }
