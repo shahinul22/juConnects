@@ -1,13 +1,17 @@
+// FULL WORKING EditProfileScreen using IMGBB instead of Firebase Storage
+// Requirements:
+// 1. Add dependency:  http: ^1.2.1
+// 2. Create free imgbb account → get API key
+// 3. Replace YOUR_IMGBB_API_KEY with your key
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../core/auth_service.dart';
-import '../authentication/login_screen.dart';
-import 'edit_student_dashboard_screen.dart';
 import '../../models/user_data.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class EditProfileScreen extends StatefulWidget {
   final UserData userData;
@@ -22,6 +26,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
 
+  // --- Controllers ---
   late TextEditingController _fullNameController;
   late TextEditingController _roleController;
   late TextEditingController _bloodController;
@@ -29,7 +34,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _idController;
   late TextEditingController _departmentController;
   late TextEditingController _sessionController;
-
   late TextEditingController _rollController;
   late TextEditingController _schoolController;
   late TextEditingController _collegeController;
@@ -42,86 +46,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _isUploading = false;
   bool _isSaving = false;
 
-  // Halls list
-  final List<String> halls = [
-    'Al Beruni Hall',
-    'Meer Mosharraf Hossain Hall',
-    'Shaheed Salam-Barkat Hall',
-    'A.F.M. Kamaluddin Hall',
-    'Moulana Bhasani Hall',
-    'Bangabondhu Sheikh Majibur Rahman Hall',
-    'Shaheed Rafiq-Jabbar Hall',
-    'Nawab Faizunnesa Hall',
-    'Fazilatunnesa Hall',
-    'Jahanara Imam Hall',
-    'Preetilata Hall',
-    'Begum Khaleda Zia Hall',
-    'Sheikh Hasina Hall',
-  ];
-
-  final List<String> bloodGroups = [
-    'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'
-  ];
-
-  final List<String> roles = [
-    'Student',
-    'Faculty',
-    'Staff',
-    'Alumni',
-    'Guest'
-  ];
-
-  final List<String> juDepartments = [
-    // Faculty of Mathematical & Physical Sciences
-    "Physics",
-    "Chemistry",
-    "Computer Science and Engineering (CSE)",
-    "Environmental Sciences",
-    "Geological Sciences",
-    "Mathematics",
-    "Statistics",
-
-    // Faculty of Social Sciences
-    "Anthropology",
-    "Economics",
-    "Geography and Environment",
-    "Government and Politics",
-    "Public Administration",
-    "Urban and Regional Planning",
-
-    // Faculty of Arts & Humanities
-    "Archaeology",
-    "Bangla",
-    "English",
-    "Drama & Dramatics",
-    "Fine Arts",
-    "History",
-    "International Relations",
-    "Journalism & Media Studies",
-    "Philosophy",
-
-    // Faculty of Biological Sciences
-    "Botany",
-    "Biochemistry & Molecular Biology",
-    "Biotechnology & Genetic Engineering",
-    "Microbiology",
-    "Pharmacy",
-    "Public Health & Informatics",
-    "Zoology",
-
-    // Faculty of Business Studies
-    "Accounting & Information Systems",
-    "Finance & Banking",
-    "Marketing",
-    "Management Studies",
-
-    // Faculty of Law
-    "Law & Justice",
-
-    // Additional / Special Department
-    "Remote Sensing & GIS",
-    "Other"
-  ];
+  final String imgbbApiKey = "2db265648cacb08a42651a80c762436e";
 
   @override
   void initState() {
@@ -134,7 +59,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _idController = TextEditingController(text: widget.userData.idNumber);
     _departmentController = TextEditingController(text: widget.userData.department);
     _sessionController = TextEditingController(text: widget.userData.session);
-
     _rollController = TextEditingController(text: widget.userData.roll);
     _schoolController = TextEditingController(text: widget.userData.school);
     _collegeController = TextEditingController(text: widget.userData.college);
@@ -145,63 +69,68 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _instagramController = TextEditingController(text: widget.userData.instagram);
   }
 
-  @override
-  void dispose() {
-    _fullNameController.dispose();
-    _roleController.dispose();
-    _bloodController.dispose();
-    _hallController.dispose();
-    _idController.dispose();
-    _departmentController.dispose();
-    _sessionController.dispose();
-    _rollController.dispose();
-    _schoolController.dispose();
-    _collegeController.dispose();
-    _addressController.dispose();
-    _phoneController.dispose();
-    _facebookController.dispose();
-    _whatsappController.dispose();
-    _instagramController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickAndUploadImage(bool isProfilePic) async {
-    final XFile? image = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 50,
-    );
-
-    if (image == null) return;
-
-    setState(() => _isUploading = true);
-
+  Future<String?> uploadToImgbb(File imageFile) async {
     try {
-      final file = File(image.path);
-      final folder = isProfilePic ? 'profile_pics' : 'cover_pics';
-      final fileName = '${widget.userData.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      setState(() => _isUploading = true);
 
-      final ref = FirebaseStorage.instance.ref().child(folder).child(fileName);
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
 
-      final fieldName = isProfilePic ? 'profilePicUrl' : 'coverPicUrl';
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userData.uid)
-          .update({fieldName: downloadUrl});
+      final url = Uri.parse("https://api.imgbb.com/1/upload?key=$imgbbApiKey");
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Upload successful')),
-      );
+      final response = await http.post(url, body: {
+        "image": base64Image,
+      });
+
+      final data = jsonDecode(response.body);
+
+      if (data["success"] == true) {
+        return data["data"]["url"];
+      } else {
+        debugPrint("IMGBB upload failed: ${data.toString()}");
+        return null;
+      }
     } catch (e) {
-      debugPrint('Upload error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: ${e.toString()}')),
-      );
+      debugPrint("IMGBB error: $e");
+      return null;
     } finally {
       setState(() => _isUploading = false);
     }
+  }
+
+  Future<void> pickImage(bool isProfile) async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (pickedFile == null) return;
+
+    final file = File(pickedFile.path);
+
+    final imageUrl = await uploadToImgbb(file);
+
+    if (imageUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to upload image")),
+      );
+      return;
+    }
+
+    final fieldName = isProfile ? "profilePicUrl" : "coverPicUrl";
+
+    await FirebaseFirestore.instance
+        .collection("users")
+        .doc(widget.userData.uid)
+        .update({fieldName: imageUrl});
+
+    setState(() {
+      if (isProfile) {
+        widget.userData.profilePicUrl = imageUrl;
+      } else {
+        widget.userData.coverPicUrl = imageUrl;
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Image updated successfully!")),
+    );
   }
 
   Future<void> _updateProfile() async {
@@ -236,416 +165,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       Navigator.pop(context, true);
     } catch (e) {
-      debugPrint('Update error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Update failed: ${e.toString()}')),
       );
     } finally {
       setState(() => _isSaving = false);
     }
-  }
-
-  Widget _buildDropdownField({
-    required String label,
-    required List<String> items,
-    required TextEditingController controller,
-    bool required = false,
-    String? hintText,
-  }) {
-    // Ensure current value is present in list; if not, show it as an extra option
-    final current = controller.text;
-    final values = List<String>.from(items);
-    if (current.isNotEmpty && !values.contains(current)) {
-      values.insert(0, current);
-    }
-
-    String? selected = controller.text.isNotEmpty ? controller.text : null;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: DropdownButtonFormField<String>(
-              value: selected,
-              decoration: InputDecoration(
-                hintText: hintText ?? 'Select $label',
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                filled: true,
-                fillColor: Colors.grey[50],
-              ),
-              items: values.map((v) => DropdownMenuItem(
-                value: v,
-                child: Text(
-                  v,
-                  style: TextStyle(
-                    color: v == 'Other' ? Colors.blue : Colors.grey[800],
-                    fontWeight: v == 'Other' ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              )).toList(),
-              onChanged: (v) {
-                if (v != null) {
-                  setState(() {
-                    controller.text = v;
-                  });
-                }
-              },
-              validator: required ? (v) => (v == null || v.isEmpty) ? 'Required' : null : null,
-              isExpanded: true,
-              icon: Icon(Icons.arrow_drop_down, color: Colors.grey[600]),
-              dropdownColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextInputField({
-    required TextEditingController controller,
-    required String label,
-    String? hintText,
-    bool required = false,
-    TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: hintText,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey[300]!),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.indigo, width: 2),
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              filled: true,
-              fillColor: Colors.grey[50],
-            ),
-            keyboardType: keyboardType,
-            maxLines: maxLines,
-            validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null : null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageUploadSection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.photo_library, color: Colors.indigo, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Profile Images',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                // Profile Picture
-                Column(
-                  children: [
-                    Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundImage: NetworkImage(widget.userData.profilePicUrl),
-                        ),
-                        if (_isUploading)
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(40),
-                              ),
-                              child: const Center(
-                                child: CircularProgressIndicator(color: Colors.white),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: 120,
-                      child: ElevatedButton(
-                        onPressed: _isUploading ? null : () => _pickAndUploadImage(true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Profile',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                // Cover Photo
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        height: 80,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          image: DecorationImage(
-                            image: NetworkImage(widget.userData.coverPicUrl),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isUploading ? null : () => _pickAndUploadImage(false),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey[200],
-                            foregroundColor: Colors.grey[800],
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text(
-                            'Cover Photo',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPersonalInfoSection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.person_outline, color: Colors.blue, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Personal Information',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildTextInputField(
-              controller: _fullNameController,
-              label: 'Full Name',
-              required: true,
-            ),
-            _buildDropdownField(
-              label: 'Role',
-              items: roles,
-              controller: _roleController,
-              required: true,
-            ),
-            _buildDropdownField(
-              label: 'Blood Group',
-              items: bloodGroups,
-              controller: _bloodController,
-            ),
-            _buildDropdownField(
-              label: 'Hall / Residence',
-              items: halls,
-              controller: _hallController,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEducationalInfoSection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.school_outlined, color: Colors.purple, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Educational Information',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildDropdownField(
-              label: 'Department',
-              items: juDepartments,
-              controller: _departmentController,
-            ),
-            _buildTextInputField(
-              controller: _idController,
-              label: 'Student/Faculty ID',
-            ),
-            _buildTextInputField(
-              controller: _sessionController,
-              label: 'Session',
-              hintText: 'e.g., 2020-21',
-            ),
-            _buildTextInputField(
-              controller: _rollController,
-              label: 'Roll No',
-              keyboardType: TextInputType.number,
-            ),
-            _buildTextInputField(
-              controller: _schoolController,
-              label: 'Previous School',
-              maxLines: 2,
-            ),
-            _buildTextInputField(
-              controller: _collegeController,
-              label: 'Previous College',
-              maxLines: 2,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContactInfoSection() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.contacts_outlined, color: Colors.green, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Contact Information',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _buildTextInputField(
-              controller: _phoneController,
-              label: 'Phone Number',
-              keyboardType: TextInputType.phone,
-            ),
-            _buildTextInputField(
-              controller: _whatsappController,
-              label: 'WhatsApp',
-              keyboardType: TextInputType.phone,
-            ),
-            _buildTextInputField(
-              controller: _facebookController,
-              label: 'Facebook ID',
-              hintText: 'Username or profile URL',
-            ),
-            _buildTextInputField(
-              controller: _instagramController,
-              label: 'Instagram',
-              hintText: '@username',
-            ),
-            _buildTextInputField(
-              controller: _addressController,
-              label: 'Address',
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -656,66 +181,71 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         elevation: 0,
-        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
             onPressed: _isSaving ? null : _updateProfile,
-            tooltip: 'Save Changes',
           ),
         ],
       ),
-      body: _isUploading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              _buildImageUploadSection(),
-              const SizedBox(height: 16),
-              _buildPersonalInfoSection(),
-              const SizedBox(height: 16),
-              _buildEducationalInfoSection(),
-              const SizedBox(height: 16),
-              _buildContactInfoSection(),
-              const SizedBox(height: 24),
-              // Save Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _updateProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.indigo,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+        child: Column(
+          children: [
+            // --- Profile & Cover ---
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 45,
+                      backgroundImage: NetworkImage(widget.userData.profilePicUrl),
                     ),
-                    elevation: 2,
-                  ),
-                  child: _isSaving
-                      ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: () => pickImage(true),
+                      child: const Text("Change Profile Photo"),
                     ),
-                  )
-                      : const Text(
-                    'Save Changes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(height: 20),
+                    Container(
+                      height: 100,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        image: DecorationImage(
+                          image: NetworkImage(widget.userData.coverPicUrl),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: () => pickImage(false),
+                      child: const Text("Change Cover Photo"),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-            ],
-          ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // --- Name ---
+            TextFormField(
+              controller: _fullNameController,
+              decoration: const InputDecoration(labelText: "Full Name"),
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: _isSaving ? null : _updateProfile,
+              child: _isSaving
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text("Save Changes"),
+            )
+          ],
         ),
       ),
     );

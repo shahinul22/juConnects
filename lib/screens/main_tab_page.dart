@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// NEW (Correct):
-import 'authentication/login_screen.dart';
 
-// 2. IMPORT DASHBOARDS
+import 'authentication/login_screen.dart';
 import 'dashboards/student_dashboard.dart';
 import 'dashboards/faculty_dashboard.dart';
 import 'dashboards/staff_dashboard.dart';
 
-// 3. IMPORT NEW TABS
 import 'feed/feed_page.dart';
 import 'notifications/notification_page.dart';
 import 'menu/menu_page.dart';
@@ -23,25 +20,11 @@ class MainTabPage extends StatefulWidget {
 
 class _MainTabPageState extends State<MainTabPage> {
   int _currentIndex = 0;
-  final User? _currentUser = FirebaseAuth.instance.currentUser;
-
-  @override
-  void initState() {
-    super.initState();
-    if (_currentUser == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) =>  LoginScreen()),
-        );
-      });
-    }
-  }
+  final user = FirebaseAuth.instance.currentUser;
 
   @override
   Widget build(BuildContext context) {
-    // Safety check
-    if (_currentUser == null) return  LoginScreen();
+    if (user == null) return LoginScreen();
 
     return Scaffold(
       body: _getCurrentTab(),
@@ -52,9 +35,9 @@ class _MainTabPageState extends State<MainTabPage> {
         unselectedItemColor: Colors.grey,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Feed'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Alerts'),
+          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Notices'),
           BottomNavigationBarItem(icon: Icon(Icons.menu), label: 'Menu'),
         ],
       ),
@@ -66,17 +49,25 @@ class _MainTabPageState extends State<MainTabPage> {
       case 0:
         return const FeedPage();
       case 1:
-      // Logic to decide WHICH dashboard to show based on role
-        return FutureBuilder<Widget>(
-          future: _getDashboardByRole(),
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user!.uid)
+              .get(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (!snapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
 
-            // Return the dashboard or a fallback
-            return snapshot.data ?? const Center(child: Text("Profile not found"));
+            final role = snapshot.data!['role'];
+
+            if (role == 'Student') {
+              return StudentDashboardScreen(userId: user!.uid);
+            } else if (role == 'Faculty') {
+              return FacultyDashboardScreen(userId: user!.uid);
+            } else {
+              return StaffDashboardScreen(userId: user!.uid);
+            }
           },
         );
       case 2:
@@ -86,22 +77,5 @@ class _MainTabPageState extends State<MainTabPage> {
       default:
         return const FeedPage();
     }
-  }
-
-  Future<Widget> _getDashboardByRole() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return  LoginScreen();
-
-    // Fetch user role from Firestore
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-
-    if (!doc.exists) return const Center(child: Text("User data not found in Database"));
-
-    final role = doc.data()?['role'];
-
-    // Return correct screen based on role
-    if (role == 'Student') return StudentDashboardScreen(userId: user.uid);
-    if (role == 'Faculty') return FacultyDashboardScreen(userId: user.uid);
-    return StaffDashboardScreen(userId: user.uid);
   }
 }

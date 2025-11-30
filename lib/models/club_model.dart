@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// =====================================================
+// CLUB MODEL
+// =====================================================
 class Club {
   final String id;
   final String name;
@@ -7,25 +10,22 @@ class Club {
   final String type;
   final String logoUrl;
   final String bannerUrl;
-
   final String description;
   final String mission;
   final String vision;
 
-  // Policies
   final String whoCanJoin;
   final String membershipCriteria;
   final String rulesAndRegulations;
   final String electionProcess;
   final String meetingRules;
 
-  // Membership
-  final bool isMember;
   final int memberCount;
+  final List<String> admins;
+  final String createdBy;
+  final bool recruitmentOpen;
 
-  // NEW FIELDS
-  final String createdBy;           // Creator UID
-  final List<String> admins;        // Admin list (UIDs)
+  bool isMember;
 
   Club({
     required this.id,
@@ -42,44 +42,45 @@ class Club {
     required this.rulesAndRegulations,
     required this.electionProcess,
     required this.meetingRules,
-    this.isMember = false,
-    this.memberCount = 0,
-    required this.createdBy,
+    required this.memberCount,
     required this.admins,
+    required this.createdBy,
+    this.recruitmentOpen = false,
+    this.isMember = false,
   });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'moto': moto,
-      'type': type,
-      'logoUrl': logoUrl,
-      'bannerUrl': bannerUrl,
-      'description': description,
-      'mission': mission,
-      'vision': vision,
-      'whoCanJoin': whoCanJoin,
-      'membershipCriteria': membershipCriteria,
-      'rulesAndRegulations': rulesAndRegulations,
-      'electionProcess': electionProcess,
-      'meetingRules': meetingRules,
-      'isMember': isMember,
-      'memberCount': memberCount,
-
-      // new
-      'createdBy': createdBy,
-      'admins': admins,
-    };
-  }
+  // =========================================
+  // ADD THIS toMap() METHOD
+  // =========================================
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'moto': moto,
+    'type': type,
+    'logoUrl': logoUrl,
+    'bannerUrl': bannerUrl,
+    'description': description,
+    'mission': mission,
+    'vision': vision,
+    'whoCanJoin': whoCanJoin,
+    'membershipCriteria': membershipCriteria,
+    'rulesAndRegulations': rulesAndRegulations,
+    'electionProcess': electionProcess,
+    'meetingRules': meetingRules,
+    'memberCount': memberCount,
+    'admins': admins,
+    'createdBy': createdBy,
+    'recruitmentOpen': recruitmentOpen,
+    'isMember': isMember,
+  };
 
   factory Club.fromFirestore(DocumentSnapshot doc) {
-    Map data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
 
     return Club(
       id: doc.id,
       name: data['name'] ?? '',
       moto: data['moto'] ?? '',
-      type: data['type'] ?? 'General',
+      type: data['type'] ?? '',
       logoUrl: data['logoUrl'] ?? '',
       bannerUrl: data['bannerUrl'] ?? '',
       description: data['description'] ?? '',
@@ -90,40 +91,113 @@ class Club {
       rulesAndRegulations: data['rulesAndRegulations'] ?? '',
       electionProcess: data['electionProcess'] ?? '',
       meetingRules: data['meetingRules'] ?? '',
-      isMember: data['isMember'] ?? false,
       memberCount: data['memberCount'] ?? 0,
-
-      // new
-      createdBy: data['createdBy'] ?? '',
       admins: List<String>.from(data['admins'] ?? []),
+      createdBy: data['createdBy'] ?? '',
+      recruitmentOpen: data['recruitmentOpen'] ?? false,
+      isMember: data['isMember'] ?? false,
     );
   }
 }
 
+// =====================================================
+// CLUB MEMBER MODEL
+// =====================================================
 class ClubMember {
+  final String uid;
+  final String name;
+  final String imageUrl;
+  final String designation;
+  final DateTime joinDate;
+  final DateTime? leaveDate;
+
+  ClubMember({
+    required this.uid,
+    required this.name,
+    required this.imageUrl,
+    required this.designation,
+    required this.joinDate,
+    this.leaveDate,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'uid': uid,
+    'name': name,
+    'imageUrl': imageUrl,
+    'designation': designation,
+    'joinDate': joinDate.toIso8601String(),
+    'leaveDate': leaveDate?.toIso8601String(),
+  };
+
+  factory ClubMember.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    return ClubMember(
+      uid: data['uid'] ?? '',
+      name: data['name'] ?? '',
+      imageUrl: data['imageUrl'] ?? '',
+      designation: data['designation'] ?? '',
+      joinDate: _toDate(data['joinDate']),
+      leaveDate:
+      data['leaveDate'] != null ? _toDate(data['leaveDate']) : null,
+    );
+  }
+}
+
+// =====================================================
+// ADVISOR MODEL
+// =====================================================
+class ClubAdvisor {
   final String name;
   final String designation;
+  final String department;
   final String imageUrl;
   final bool isFaculty;
 
-  ClubMember({
+  final DateTime joinDate;
+  final DateTime? leaveDate;
+
+  ClubAdvisor({
     required this.name,
     required this.designation,
+    required this.department,
     required this.imageUrl,
-    this.isFaculty = false,
+    required this.isFaculty,
+    required this.joinDate,
+    this.leaveDate,
   });
 
   Map<String, dynamic> toMap() => {
     'name': name,
     'designation': designation,
+    'department': department,
     'imageUrl': imageUrl,
     'isFaculty': isFaculty,
+    'joinDate': joinDate.toIso8601String(),
+    'leaveDate': leaveDate?.toIso8601String(),
   };
 
-  factory ClubMember.fromMap(Map data) => ClubMember(
-    name: data['name'] ?? '',
-    designation: data['designation'] ?? '',
-    imageUrl: data['imageUrl'] ?? '',
-    isFaculty: data['isFaculty'] ?? false,
-  );
+  factory ClubAdvisor.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
+    return ClubAdvisor(
+      name: data['name'] ?? '',
+      designation: data['designation'] ?? '',
+      department: data['department'] ?? '',
+      imageUrl: data['imageUrl'] ?? '',
+      isFaculty: data['isFaculty'] ?? false,
+      joinDate: _toDate(data['joinDate']),
+      leaveDate:
+      data['leaveDate'] != null ? _toDate(data['leaveDate']) : null,
+    );
+  }
+}
+
+// =====================================================
+// DateTime FIX FUNCTION (supports Firestore Timestamp)
+// =====================================================
+DateTime _toDate(dynamic value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is String) return DateTime.parse(value);
+  return DateTime.now();
 }
