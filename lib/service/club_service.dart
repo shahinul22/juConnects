@@ -1,18 +1,20 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/club_model.dart';
+import '../models/club_event_model.dart';
+
 
 class ClubService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   // -----------------------------
-  // CREATE NEW CLUB
+  // CREATE CLUB
   // -----------------------------
   Future<void> createClub(Club club) async {
     await _db.collection("clubs").doc(club.id).set(club.toMap());
   }
 
   // -----------------------------
-  // UPDATE CLUB INFO
+  // UPDATE CLUB
   // -----------------------------
   Future<void> updateClub(String clubId, Map<String, dynamic> data) async {
     await _db.collection("clubs").doc(clubId).update(data);
@@ -28,7 +30,7 @@ class ClubService {
   }
 
   // -----------------------------
-  // GET ACTIVE CLUB MEMBERS
+  // GET MEMBERS
   // -----------------------------
   Stream<List<ClubMember>> getMembers(String clubId) {
     return _db
@@ -37,12 +39,10 @@ class ClubService {
         .collection("members")
         .where("leaveDate", isNull: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => ClubMember.fromFirestore(doc)).toList());
+        .map((snap) =>
+        snap.docs.map((doc) => ClubMember.fromFirestore(doc)).toList());
   }
 
-  // -----------------------------
-  // GET PREVIOUS MEMBERS
-  // -----------------------------
   Stream<List<ClubMember>> getPreviousMembers(String clubId) {
     return _db
         .collection("clubs")
@@ -51,11 +51,12 @@ class ClubService {
         .where("leaveDate", isNull: false)
         .orderBy("leaveDate", descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => ClubMember.fromFirestore(doc)).toList());
+        .map((snap) =>
+        snap.docs.map((doc) => ClubMember.fromFirestore(doc)).toList());
   }
 
   // -----------------------------
-  // GET ACTIVE ADVISORS
+  // GET ADVISORS
   // -----------------------------
   Stream<List<ClubAdvisor>> getAdvisors(String clubId) {
     return _db
@@ -64,12 +65,10 @@ class ClubService {
         .collection("advisors")
         .where("leaveDate", isNull: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => ClubAdvisor.fromFirestore(doc)).toList());
+        .map((snap) =>
+        snap.docs.map((doc) => ClubAdvisor.fromFirestore(doc)).toList());
   }
 
-  // -----------------------------
-  // GET PREVIOUS ADVISORS
-  // -----------------------------
   Stream<List<ClubAdvisor>> getPreviousAdvisors(String clubId) {
     return _db
         .collection("clubs")
@@ -78,11 +77,12 @@ class ClubService {
         .where("leaveDate", isNull: false)
         .orderBy("leaveDate", descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => ClubAdvisor.fromFirestore(doc)).toList());
+        .map((snap) =>
+        snap.docs.map((doc) => ClubAdvisor.fromFirestore(doc)).toList());
   }
 
   // -----------------------------
-  // ADD MEMBER (ADMIN OR JOIN)
+  // ADD MEMBER
   // -----------------------------
   Future<void> addMember({
     required String clubId,
@@ -93,47 +93,43 @@ class ClubService {
 
     final memberMap = member.toMap();
 
-    // Ensure joinDate
-    if (memberMap['joinDate'] == null || (memberMap['joinDate'] as String).isEmpty) {
+    // Ensure joinDate exists
+    if (memberMap['joinDate'] == null ||
+        (memberMap['joinDate'] as String).isEmpty) {
       memberMap['joinDate'] = DateTime.now().toIso8601String();
     }
 
-    // 1️⃣ Add member inside club document
-    await clubRef.collection("members").doc(member.uid).set(memberMap, SetOptions(merge: true));
+    await clubRef
+        .collection("members")
+        .doc(member.uid)
+        .set(memberMap, SetOptions(merge: true));
 
-    // 2️⃣ Increment member count
     await clubRef.update({"memberCount": FieldValue.increment(1)});
 
-    // 3️⃣ Update user's main fields
+    // Update user document
     await userRef.update({
       "clubRole": member.designation,
       "clubId": clubId,
+      "clubs": FieldValue.arrayUnion([
+        {
+          "clubId": clubId,
+          "clubName": (await clubRef.get()).data()?['name'] ?? "Unknown Club",
+          "role": member.designation
+        }
+      ])
     });
 
-    // 4️⃣ Fetch club name
-    final clubSnap = await clubRef.get();
-    final clubName = clubSnap['clubName'] ?? "Unknown Club";
-
-    // 5️⃣ Add to user.clubs[] list
-    final clubEntry = {
-      "clubId": clubId,
-      "clubName": clubName,
-      "role": member.designation,
-    };
-
-    await userRef.update({
-      "clubs": FieldValue.arrayUnion([clubEntry])
-    });
-
-    // 6️⃣ Promote admin if needed
+    // Promote to admin if executive
     if (_isAdminRole(member.designation)) {
       await promoteAdmin(clubId, member.uid);
     }
+
+    // Add UID to members list
+    await clubRef.update({
+      "members": FieldValue.arrayUnion([member.uid])
+    });
   }
 
-  // -----------------------------
-  // CHECK IF ROLE IS ADMIN
-  // -----------------------------
   bool _isAdminRole(String role) {
     return [
       "President",
@@ -146,18 +142,12 @@ class ClubService {
     ].contains(role);
   }
 
-  // -----------------------------
-  // PROMOTE ADMIN
-  // -----------------------------
   Future<void> promoteAdmin(String clubId, String uid) async {
     await _db.collection("clubs").doc(clubId).update({
       "admins": FieldValue.arrayUnion([uid]),
     });
   }
 
-  // -----------------------------
-  // DEMOTE ADMIN
-  // -----------------------------
   Future<void> demoteAdmin(String clubId, String uid) async {
     await _db.collection("clubs").doc(clubId).update({
       "admins": FieldValue.arrayRemove([uid]),
@@ -172,16 +162,20 @@ class ClubService {
     required ClubAdvisor advisor,
   }) async {
     final advisorMap = advisor.toMap();
-
-    if (advisorMap['joinDate'] == null || (advisorMap['joinDate'] as String).isEmpty) {
+    if (advisorMap['joinDate'] == null ||
+        (advisorMap['joinDate'] as String).isEmpty) {
       advisorMap['joinDate'] = DateTime.now().toIso8601String();
     }
 
-    await _db.collection("clubs").doc(clubId).collection("advisors").add(advisorMap);
+    await _db
+        .collection("clubs")
+        .doc(clubId)
+        .collection("advisors")
+        .add(advisorMap);
   }
 
   // -----------------------------
-  // JOIN CLUB
+  // JOIN CLUB (instant)
   // -----------------------------
   Future<void> joinClub({
     required String clubId,
@@ -201,7 +195,7 @@ class ClubService {
   }
 
   // -----------------------------
-  // REMOVE MEMBER (with clubs[] removal)
+  // REMOVE MEMBER
   // -----------------------------
   Future<void> removeMember({
     required String clubId,
@@ -209,48 +203,36 @@ class ClubService {
   }) async {
     final clubRef = _db.collection("clubs").doc(clubId);
     final userRef = _db.collection("users").doc(uid);
-
-    // Fetch club info (for removing from list)
-    final clubSnap = await clubRef.get();
-    final clubName = clubSnap['clubName'] ?? "Unknown Club";
-
-    // Fetch member role
     final memberSnap = await clubRef.collection("members").doc(uid).get();
-    final role = memberSnap['designation'] ?? "Member";
+    final role =
+        (memberSnap.data()?['designation'] ?? "Member") as String? ?? "Member";
+    final clubName = (await clubRef.get()).data()?['name'] ?? "Unknown Club";
 
-    // 1️⃣ Mark leaveDate
     await memberSnap.reference.update({
       "leaveDate": DateTime.now().toIso8601String(),
     });
 
-    // 2️⃣ Decrement member count & remove admin if needed
     await clubRef.update({
       "memberCount": FieldValue.increment(-1),
       "admins": FieldValue.arrayRemove([uid]),
+      "members": FieldValue.arrayRemove([uid]),
     });
 
-    // 3️⃣ Remove from user clubs[]
     await userRef.update({
       "clubs": FieldValue.arrayRemove([
-        {
-          "clubId": clubId,
-          "clubName": clubName,
-          "role": role,
-        }
+        {"clubId": clubId, "clubName": clubName, "role": role}
       ]),
       "clubRole": FieldValue.delete(),
       "clubId": FieldValue.delete(),
     });
   }
 
-  // -----------------------------
-  // REMOVE ADVISOR
-  // -----------------------------
   Future<void> removeAdvisor({
     required String clubId,
     required String advisorId,
   }) async {
-    final advisorRef = _db.collection("clubs")
+    final advisorRef = _db
+        .collection("clubs")
         .doc(clubId)
         .collection("advisors")
         .doc(advisorId);
@@ -271,25 +253,19 @@ class ClubService {
     final clubRef = _db.collection("clubs").doc(clubId);
     final memberRef = clubRef.collection("members").doc(uid);
 
-    // Update inside club
     await memberRef.update({'designation': newRole});
 
-    // Update admin list
     if (_isAdminRole(newRole)) {
-      await clubRef.update({'admins': FieldValue.arrayUnion([uid])});
+      await promoteAdmin(clubId, uid);
     } else {
-      await clubRef.update({'admins': FieldValue.arrayRemove([uid])});
+      await demoteAdmin(clubId, uid);
     }
 
-    // Update user role
     await _db.collection('users').doc(uid).update({'clubRole': newRole});
   }
 
-  // -----------------------------
-  // GET EXECUTIVE MEMBERS
-  // -----------------------------
   Stream<List<ClubMember>> getExecutives(String clubId) {
-    const executiveRoles = [
+    const roles = [
       "President",
       "Vice President",
       "General Secretary",
@@ -305,7 +281,195 @@ class ClubService {
         .snapshots()
         .map((snap) => snap.docs
         .map((doc) => ClubMember.fromFirestore(doc))
-        .where((m) => executiveRoles.contains(m.designation))
+        .where((m) => roles.contains(m.designation))
         .toList());
   }
+
+  // -----------------------------
+  // TOGGLE JOIN BUTTON
+  // -----------------------------
+  Future<void> toggleJoinButton(String clubId, bool value) async {
+    await _db
+        .collection('clubs')
+        .doc(clubId)
+        .update({'joinButtonEnabled': value});
+  }
+
+  // -----------------------------
+  // MEMBERSHIP REQUESTS
+  // -----------------------------
+  Future<void> sendJoinRequest({
+    required String clubId,
+    required String uid,
+    required String name,
+    required String email,
+    required String image,
+    required String department,
+    required String session,
+    required String studentId,
+    required String hall,
+    required String phone,
+  }) async {
+    final reqRef = _db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('membership_requests')
+        .doc(uid);
+
+    await reqRef.set({
+      'uid': uid,
+      'name': name,
+      'email': email,
+      'image': image,
+      'department': department,
+      'session': session,
+      'studentId': studentId,
+      'hall': hall,
+      'phone': phone,
+      'status': 'pending',
+      'timestamp': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<List<Map<String, dynamic>>> getJoinRequests(String clubId) {
+    return _db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('membership_requests')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => {...d.data(), 'id': d.id}).toList());
+  }
+
+  Future<void> approveRequest({
+    required String clubId,
+    required String uid,
+    String designation = "Member",
+  }) async {
+    final reqRef = _db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('membership_requests')
+        .doc(uid);
+
+    final reqSnap = await reqRef.get();
+    if (!reqSnap.exists) return;
+
+    final data = reqSnap.data()!;
+    final member = ClubMember(
+      uid: data['uid'] ?? uid,
+      name: data['name'] ?? '',
+      imageUrl: data['image'] ?? '',
+      designation: designation,
+      joinDate: DateTime.now(),
+    );
+
+    await addMember(clubId: clubId, member: member);
+    await reqRef.delete();
+  }
+
+  Future<void> rejectRequest({
+    required String clubId,
+    required String uid,
+  }) async {
+    final reqRef = _db
+        .collection('clubs')
+        .doc(clubId)
+        .collection('membership_requests')
+        .doc(uid);
+
+    await reqRef.delete();
+  }
+
+  // -----------------------------
+  // EVENT MANAGEMENT
+  // -----------------------------
+  // -----------------------------
+// EVENT MANAGEMENT
+// -----------------------------
+  Future<void> createEvent({
+    required String clubId,
+    required ClubEvent event,
+  }) async {
+    final eventsRef = _db.collection('clubs').doc(clubId).collection('events');
+    await eventsRef.add(event.toMap());
+  }
+
+  Stream<List<ClubEvent>> getEvents(String clubId, {String? type}) {
+    Query<Map<String, dynamic>> coll = _db.collection('clubs').doc(clubId).collection('events');
+    if (type != null) coll = coll.where('type', isEqualTo: type); // fixed
+
+    return coll.snapshots().map(
+          (snap) => snap.docs.map((doc) => ClubEvent.fromFirestore(doc)).toList(),
+    );
+  }
+
+  // -----------------------------
+  // REGISTER FOR EVENT
+  // -----------------------------
+  Future<void> registerForEvent({
+    required String clubId,
+    required String eventId,
+    required String userId,
+  }) async {
+    final eventRef =
+    _db.collection('clubs').doc(clubId).collection('events').doc(eventId);
+
+    final eventSnap = await eventRef.get();
+    if (!eventSnap.exists) throw Exception("Event not found");
+
+    final event = ClubEvent.fromFirestore(eventSnap);
+
+    // Check participant limit
+    final currentParticipants = event.registrationForm?.length ?? 0;
+    if (event.participantLimit != null &&
+        currentParticipants >= event.participantLimit!) {
+      throw Exception("Participant limit reached");
+    }
+
+    // Update registration map in Firestore
+    final registration = event.registrationForm ?? {};
+    registration[userId] = {
+      "userId": userId,
+      "timestamp": FieldValue.serverTimestamp(),
+    };
+
+    await eventRef.update({"registrationForm": registration});
+  }
+
+  Future<void> unregisterFromEvent({
+    required String clubId,
+    required String eventId,
+    required String userId,
+  }) async {
+    final eventRef =
+    _db.collection('clubs').doc(clubId).collection('events').doc(eventId);
+
+    final eventSnap = await eventRef.get();
+    if (!eventSnap.exists) throw Exception("Event not found");
+
+    final event = ClubEvent.fromFirestore(eventSnap);
+    final registration = event.registrationForm ?? {};
+    registration.remove(userId);
+
+    await eventRef.update({"registrationForm": registration});
+  }
+
+  // -----------------------------
+  // GET MEMBERS OF EVENT
+  // -----------------------------
+  Future<List<String>> getEventParticipants({
+    required String clubId,
+    required String eventId,
+  }) async {
+    final eventRef =
+    _db.collection('clubs').doc(clubId).collection('events').doc(eventId);
+    final snap = await eventRef.get();
+    if (!snap.exists) return [];
+
+    final event = ClubEvent.fromFirestore(snap);
+    return event.registrationForm?.keys.toList() ?? [];
+  }
+
+
 }

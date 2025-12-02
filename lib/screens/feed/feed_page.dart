@@ -5,12 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../service/post_service.dart';
-import '../../providers/user_cache.dart';
-
 import '../dashboards/faculty_dashboard.dart';
 import '../dashboards/staff_dashboard.dart';
 import '../dashboards/student_dashboard.dart';
-
 import 'create_post_screen.dart';
 import 'comments_screen.dart';
 import 'edit_post_screen.dart';
@@ -20,15 +17,18 @@ class FeedPage extends ConsumerWidget {
 
   void _openUserProfile(BuildContext context, String uid, String role) {
     if (role == "Student") {
-      Navigator.push(context,
+      Navigator.push(
+        context,
         MaterialPageRoute(builder: (_) => StudentDashboardScreen(userId: uid)),
       );
     } else if (role == "Faculty") {
-      Navigator.push(context,
+      Navigator.push(
+        context,
         MaterialPageRoute(builder: (_) => FacultyDashboardScreen(userId: uid)),
       );
     } else if (role == "Staff") {
-      Navigator.push(context,
+      Navigator.push(
+        context,
         MaterialPageRoute(builder: (_) => StaffDashboardScreen(userId: uid)),
       );
     } else {
@@ -49,7 +49,7 @@ class FeedPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Campus Feed'),
+        title: const Text('Jahangirnagar University'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_box_outlined),
@@ -72,35 +72,36 @@ class FeedPage extends ConsumerWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty) {
+          final postDocs = snapshot.data!.docs;
+          if (postDocs.isEmpty) {
             return const Center(child: Text("No posts yet. Be the first!"));
           }
 
           return ListView.builder(
-            itemCount: docs.length,
+            itemCount: postDocs.length,
             itemBuilder: (context, idx) {
-              final postDoc = docs[idx];
+              final postDoc = postDocs[idx];
               final data = postDoc.data() as Map<String, dynamic>;
-
-              final authorName = data['authorName'] ?? 'Unknown User';
-              final authorRole = data['authorRole'] ?? 'Student';
-              final content = data['content'] ?? '';
-              final likedBy = List<String>.from(data['likedBy'] ?? []);
-              final likeCount = likedBy.length;
               final postId = postDoc.id;
-              final timestamp = data['timestamp'] as Timestamp?;
-              final isLiked =
-                  currentUser != null && likedBy.contains(currentUser.uid);
-              final isOwner =
-                  currentUser != null && data['authorUid'] == currentUser.uid;
 
+              final authorUid = data['authorUid'] ?? '';
+              final authorRole = data['authorRole'] ?? 'Student';
+              final authorName = data['authorName']?.toString() ?? 'Unknown';
+              final authorPhotoUrl = data['authorPhotoUrl']?.toString() ?? '';
+              final content = data['content'] ?? '';
+              final imageUrl = data['imageUrl'] ?? '';
+              final timestamp = data['timestamp'] as Timestamp?;
               final dateStr = timestamp != null
                   ? DateFormat('MMM d, h:mm a').format(timestamp.toDate())
                   : 'Just now';
+              final isOwner = currentUser != null && currentUser.uid == authorUid;
 
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                margin:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -110,20 +111,22 @@ class FeedPage extends ConsumerWidget {
                       Row(
                         children: [
                           GestureDetector(
-                            onTap: () {
-                              _openUserProfile(
-                                context,
-                                data['authorUid'],
-                                authorRole,
-                              );
-                            },
+                            onTap: () =>
+                                _openUserProfile(context, authorUid, authorRole),
                             child: CircleAvatar(
+                              radius: 20,
                               backgroundColor: Colors.blueAccent.shade100,
-                              child: Text(
+                              backgroundImage: authorPhotoUrl.isNotEmpty
+                                  ? NetworkImage(authorPhotoUrl)
+                                  : null,
+                              child: authorPhotoUrl.isEmpty
+                                  ? Text(
                                 authorName.isNotEmpty
                                     ? authorName[0].toUpperCase()
                                     : 'U',
-                              ),
+                                style: const TextStyle(color: Colors.white),
+                              )
+                                  : null,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -136,8 +139,7 @@ class FeedPage extends ConsumerWidget {
                                         fontWeight: FontWeight.bold)),
                                 Text(dateStr,
                                     style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600])),
+                                        fontSize: 12, color: Colors.grey[600])),
                               ],
                             ),
                           ),
@@ -175,53 +177,39 @@ class FeedPage extends ConsumerWidget {
                                       ],
                                     ),
                                   );
-
                                   if (ok == true) {
-                                    await postService.deletePost(
-                                        postId: postId);
+                                    await postService.deletePost(postId: postId);
                                   }
                                 }
                               },
                               itemBuilder: (_) => const [
-                                PopupMenuItem(
-                                    value: "edit", child: Text("Edit")),
-                                PopupMenuItem(
-                                    value: "delete", child: Text("Delete")),
+                                PopupMenuItem(value: "edit", child: Text("Edit")),
+                                PopupMenuItem(value: "delete", child: Text("Delete")),
                               ],
                             ),
                         ],
                       ),
-
                       const SizedBox(height: 10),
                       // CONTENT
                       Text(content, style: const TextStyle(fontSize: 16)),
                       const SizedBox(height: 10),
-
-                      // ACTIONS
+                      // IMAGE
+                      if (imageUrl.isNotEmpty)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(imageUrl),
+                        ),
+                      const SizedBox(height: 10),
+                      // COMMENTS BUTTON
                       Row(
                         children: [
-                          IconButton(
-                            icon: Icon(isLiked
-                                ? Icons.thumb_up
-                                : Icons.thumb_up_outlined),
-                            onPressed: () async {
-                              if (currentUser == null) return;
-                              await postService.toggleLike(
-                                postId: postId,
-                                userUid: currentUser.uid,
-                              );
-                            },
-                          ),
-                          Text("$likeCount"),
-                          const SizedBox(width: 20),
                           IconButton(
                             icon: const Icon(Icons.comment_outlined),
                             onPressed: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) =>
-                                      CommentsScreen(postId: postId),
+                                  builder: (_) => CommentsScreen(postId: postId),
                                 ),
                               );
                             },

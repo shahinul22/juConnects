@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+// Keep your existing imports
 import '../../core/auth_service.dart';
 import 'edit_student_dashboard_screen.dart';
 import '../authentication/login_screen.dart';
@@ -61,7 +62,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           'instagram': '',
           'profilePicUrl': dummyProfilePic,
           'coverPicUrl': dummyCoverPic,
-          'clubs': [], // Clubs as list of maps
+          'clubs': [],
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -138,7 +139,126 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: _buildProfileContent(),
+      // Everything is inside SingleChildScrollView, so it scrolls together
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: [
+            _buildHeaderSection(),
+
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  _buildInfoCard(
+                    title: 'Basic Information',
+                    icon: Icons.person_outline,
+                    iconColor: Colors.blue,
+                    children: [
+                      _buildInfoRowWithAction(Icons.water_drop, 'Blood Group', userData!.bloodGroup, Colors.red),
+                      _buildInfoRowWithAction(Icons.apartment, 'Hall/Residence', userData!.hall, Colors.orange),
+                      _buildInfoRowWithAction(Icons.work_outline, 'Role', userData!.role, Colors.green),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInfoCard(
+                    title: 'Educational Information',
+                    icon: Icons.school_outlined,
+                    iconColor: Colors.purple,
+                    children: [
+                      _buildInfoRowWithAction(Icons.email_outlined, 'Email', userData!.email, Colors.blue, onTap: _launchEmail),
+                      _buildInfoRowWithAction(Icons.badge_outlined, 'Student ID', userData!.idNumber, Colors.indigo),
+                      _buildInfoRowWithAction(Icons.business_outlined, 'Department', userData!.department, Colors.teal),
+                      _buildInfoRowWithAction(Icons.calendar_today_outlined, 'Session', userData!.session, Colors.amber),
+                      if (userData!.roll.isNotEmpty)
+                        _buildInfoRowWithAction(Icons.numbers, 'Roll No', userData!.roll, Colors.cyan),
+                      if (userData!.school.isNotEmpty)
+                        _buildInfoRowWithAction(Icons.school_outlined, 'Previous School', userData!.school, Colors.blueGrey),
+                      if (userData!.college.isNotEmpty)
+                        _buildInfoRowWithAction(Icons.account_balance_outlined, 'Previous College', userData!.college, Colors.brown),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // --- Clubs & Societies Card ---
+                  if (userData!.clubs.isNotEmpty)
+                    _buildInfoCard(
+                      title: 'Clubs & Societies',
+                      icon: Icons.group_outlined,
+                      iconColor: Colors.deepPurple,
+                      children: userData!.clubs.map((club) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.circle, size: 10, color: Colors.deepPurple),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '${club.clubName} — ${club.role}',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[800]),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
+                  // Contact Details
+                  if (_hasContactInfo())
+                    _buildInfoCard(
+                      title: 'Contact Details',
+                      icon: Icons.contacts_outlined,
+                      iconColor: Colors.green,
+                      children: [
+                        if (userData!.phoneNumber.isNotEmpty)
+                          _buildInfoRowWithAction(Icons.phone_outlined, 'Phone Number', userData!.phoneNumber, Colors.green, onTap: _launchPhone),
+                        if (userData!.whatsapp.isNotEmpty)
+                          _buildInfoRowWithAction(Icons.chat_outlined, 'WhatsApp', userData!.whatsapp, Colors.green, onTap: _launchWhatsApp),
+                        if (userData!.facebookId.isNotEmpty)
+                          _buildInfoRowWithAction(Icons.facebook, 'Facebook', userData!.facebookId, Colors.blue, onTap: _launchFacebook),
+                        if (userData!.instagram.isNotEmpty)
+                          _buildInfoRowWithAction(Icons.camera_alt_outlined, 'Instagram', userData!.instagram, Colors.pink, onTap: _launchInstagram),
+                        if (userData!.address.isNotEmpty)
+                          _buildInfoRowWithAction(Icons.location_on_outlined, 'Address', userData!.address, Colors.red),
+                      ],
+                    ),
+
+                  if (_hasSocialMedia()) _buildSocialMediaCard(),
+
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+
+            // --- Bottom Section (Scrolls with page) ---
+
+            // 1. Zebra Line Separator
+            SizedBox(
+              height: 12,
+              width: double.infinity,
+              child: CustomPaint(painter: ZebraStripePainter()),
+            ),
+
+            // 2. Action Buttons (White background)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 16),
+              color: Colors.white,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildQuickAction(Icons.edit_note, 'Edit Profile', Colors.indigo, _editProfile),
+                  _buildQuickAction(Icons.share, 'Share Profile', Colors.green, () => _showComingSoonSnackbar('Share Profile')),
+                  _buildQuickAction(Icons.qr_code, 'QR Code', Colors.orange, () => _showComingSoonSnackbar('QR Code')),
+                ],
+              ),
+            ),
+            // Add safe area padding for bottom of screen
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
+        ),
+      ),
     );
   }
 
@@ -183,102 +303,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileContent() {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      child: Column(
-        children: [
-          _buildHeaderSection(),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                _buildQuickActionsCard(),
-                const SizedBox(height: 16),
-                _buildInfoCard(
-                  title: 'Basic Information',
-                  icon: Icons.person_outline,
-                  iconColor: Colors.blue,
-                  children: [
-                    _buildInfoRowWithAction(Icons.water_drop, 'Blood Group', userData!.bloodGroup, Colors.red),
-                    _buildInfoRowWithAction(Icons.apartment, 'Hall/Residence', userData!.hall, Colors.orange),
-                    _buildInfoRowWithAction(Icons.work_outline, 'Role', userData!.role, Colors.green),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildInfoCard(
-                  title: 'Educational Information',
-                  icon: Icons.school_outlined,
-                  iconColor: Colors.purple,
-                  children: [
-                    _buildInfoRowWithAction(Icons.email_outlined, 'Email', userData!.email, Colors.blue, onTap: _launchEmail),
-                    _buildInfoRowWithAction(Icons.badge_outlined, 'Student ID', userData!.idNumber, Colors.indigo),
-                    _buildInfoRowWithAction(Icons.business_outlined, 'Department', userData!.department, Colors.teal),
-                    _buildInfoRowWithAction(Icons.calendar_today_outlined, 'Session', userData!.session, Colors.amber),
-                    if (userData!.roll.isNotEmpty)
-                      _buildInfoRowWithAction(Icons.numbers, 'Roll No', userData!.roll, Colors.cyan),
-                    if (userData!.school.isNotEmpty)
-                      _buildInfoRowWithAction(Icons.school_outlined, 'Previous School', userData!.school, Colors.blueGrey),
-                    if (userData!.college.isNotEmpty)
-                      _buildInfoRowWithAction(Icons.account_balance_outlined, 'Previous College', userData!.college, Colors.brown),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // --- Clubs & Societies Card ---
-                if (userData!.clubs.isNotEmpty)
-                  _buildInfoCard(
-                    title: 'Clubs & Societies',
-                    icon: Icons.group_outlined,
-                    iconColor: Colors.deepPurple,
-                    children: userData!.clubs.map((club) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.circle, size: 10, color: Colors.deepPurple),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '${club.clubName} — ${club.role}',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[800]),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-
-                // Contact Details
-                if (_hasContactInfo())
-                  _buildInfoCard(
-                    title: 'Contact Details',
-                    icon: Icons.contacts_outlined,
-                    iconColor: Colors.green,
-                    children: [
-                      if (userData!.phoneNumber.isNotEmpty)
-                        _buildInfoRowWithAction(Icons.phone_outlined, 'Phone Number', userData!.phoneNumber, Colors.green, onTap: _launchPhone),
-                      if (userData!.whatsapp.isNotEmpty)
-                        _buildInfoRowWithAction(Icons.chat_outlined, 'WhatsApp', userData!.whatsapp, Colors.green, onTap: _launchWhatsApp),
-                      if (userData!.facebookId.isNotEmpty)
-                        _buildInfoRowWithAction(Icons.facebook, 'Facebook', userData!.facebookId, Colors.blue, onTap: _launchFacebook),
-                      if (userData!.instagram.isNotEmpty)
-                        _buildInfoRowWithAction(Icons.camera_alt_outlined, 'Instagram', userData!.instagram, Colors.pink, onTap: _launchInstagram),
-                      if (userData!.address.isNotEmpty)
-                        _buildInfoRowWithAction(Icons.location_on_outlined, 'Address', userData!.address, Colors.red),
-                    ],
-                  ),
-
-                if (_hasSocialMedia()) _buildSocialMediaCard(),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -355,30 +379,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildQuickActionsCard() {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Colors.white, Colors.grey[50]!]),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildQuickAction(Icons.edit_note, 'Edit Profile', Colors.indigo, _editProfile),
-              _buildQuickAction(Icons.share, 'Share Profile', Colors.green, () => _showComingSoonSnackbar('Share Profile')),
-              _buildQuickAction(Icons.qr_code, 'QR Code', Colors.orange, () => _showComingSoonSnackbar('QR Code')),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showComingSoonSnackbar(String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -391,19 +391,31 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildQuickAction(IconData icon, String label, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: color.withOpacity(0.3), width: 2)),
-            child: Icon(icon, color: color, size: 28),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color.withOpacity(0.3), width: 2)
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(height: 6),
+              Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[700]), textAlign: TextAlign.center),
+            ],
           ),
-          const SizedBox(height: 8),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey[700]), textAlign: TextAlign.center),
-        ],
+        ),
       ),
     );
   }
@@ -520,4 +532,36 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   bool _hasSocialMedia() {
     return userData!.facebookId.isNotEmpty || userData!.instagram.isNotEmpty || userData!.whatsapp.isNotEmpty;
   }
+}
+
+// Custom Painter for Zebra Stripes
+class ZebraStripePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.fill;
+
+    // 1. Background (Yellow)
+    paint.color = const Color(0xFFFFEA00);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+
+    // 2. Stripes (Black)
+    paint.color = Colors.black;
+    const double stripeWidth = 12.0;
+    const double gap = 12.0;
+
+    // Draw diagonals from left to right
+    for (double i = -size.height; i < size.width; i += (stripeWidth + gap)) {
+      final path = Path();
+      path.moveTo(i, size.height);
+      path.lineTo(i + stripeWidth, size.height);
+      path.lineTo(i + stripeWidth + size.height, 0);
+      path.lineTo(i + size.height, 0);
+      path.close();
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

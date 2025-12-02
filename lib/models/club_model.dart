@@ -27,6 +27,12 @@ class Club {
 
   bool isMember;
 
+  /// NEW: toggle controlled by admins to expose "Join" button to users
+  final bool joinButtonEnabled;
+
+  /// NEW: list of uids (keeps quick membership checks if you prefer)
+  final List<String> members;
+
   Club({
     required this.id,
     required this.name,
@@ -47,10 +53,12 @@ class Club {
     required this.createdBy,
     this.recruitmentOpen = false,
     this.isMember = false,
+    this.joinButtonEnabled = false,
+    this.members = const [],
   });
 
   // =========================================
-  // ADD THIS toMap() METHOD
+  // toMap() METHOD
   // =========================================
   Map<String, dynamic> toMap() => {
     'name': name,
@@ -71,6 +79,9 @@ class Club {
     'createdBy': createdBy,
     'recruitmentOpen': recruitmentOpen,
     'isMember': isMember,
+    // NEW FIELDS
+    'joinButtonEnabled': joinButtonEnabled,
+    'members': members,
   };
 
   factory Club.fromFirestore(DocumentSnapshot doc) {
@@ -96,6 +107,9 @@ class Club {
       createdBy: data['createdBy'] ?? '',
       recruitmentOpen: data['recruitmentOpen'] ?? false,
       isMember: data['isMember'] ?? false,
+      // NEW FIELDS with safe defaults
+      joinButtonEnabled: data['joinButtonEnabled'] ?? false,
+      members: List<String>.from(data['members'] ?? []),
     );
   }
 }
